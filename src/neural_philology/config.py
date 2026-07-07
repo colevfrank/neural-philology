@@ -14,7 +14,7 @@ class TrainingConfig:
     subsample: float = 1e-3
     compass_epochs: int = 5
     slice_epochs: int = 5
-    lr: float = 0.025
+    lr: float = 0.0025  # Adam initial lr (see twec.sgns), linearly decayed
     min_lr: float = 1e-4
     batch_size: int = 8192
     seed: int = 42

@@ -4,8 +4,10 @@ A deliberately small reimplementation of word2vec's SGNS objective so that the
 TWEC/compass method can be expressed exactly: per-slice models reuse the
 compass's context matrix with ``requires_grad=False``. Follows word2vec
 conventions: dynamic window (uniform 1..window), frequency subsampling,
-unigram^0.75 negative sampling, SGD with linear learning-rate decay,
-target matrix init uniform(-0.5/dim, 0.5/dim), context matrix init zeros.
+unigram^0.75 negative sampling, linear learning-rate decay, target matrix
+init uniform(-0.5/dim, 0.5/dim), context matrix init zeros. One deliberate
+departure: Adam instead of per-pair SGD, because minibatched gradients scale
+as 1/batch_size and Adam's per-parameter normalisation absorbs that.
 """
 
 from __future__ import annotations
@@ -159,7 +161,11 @@ def train_sgns(
         seed=config.seed,
     ).to(device)
     params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.SGD(params, lr=config.lr)
+    # Adam rather than word2vec's per-pair SGD: minibatching divides each
+    # pair's gradient by batch_size, which plain SGD can't absorb (per-pair
+    # steps shrink ~1/B) — Adam's per-parameter normalisation is invariant to
+    # that scaling, so training behaves consistently across batch sizes.
+    optimizer = torch.optim.Adam(params, lr=config.lr)
 
     noise = np.power(stream_counts, 0.75)
     if noise.sum() == 0:
@@ -194,7 +200,9 @@ def train_sgns(
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            progress.set_postfix(loss=f"{loss.item():.4f}", lr=f"{lr:.4f}")
+            progress.set_postfix(
+                loss=f"{loss.item() / len(centers_np):.4f}", lr=f"{lr:.4f}"
+            )
 
     w_in = model.w_in.weight.detach().cpu().numpy().astype(np.float32)
     w_out = model.w_out.weight.detach().cpu().numpy().astype(np.float32)

@@ -1,0 +1,28 @@
+[project]
+name = "neural-philology"
+version = "0.1.0"
+description = "Explore how word meanings change over time with diachronic word embeddings (TWEC)"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=1.26",
+    "torch>=2.2",
+    "tqdm>=4.66",
+]
+
+[project.scripts]
+nphil = "neural_philology.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/neural_philology"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

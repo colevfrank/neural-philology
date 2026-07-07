@@ -1,0 +1,7 @@
+query_word,query_year,target_year,expected_word
+car,1990,1900,carriage
+radio,1990,1850,telegraph
+gay,1990,1900,merry
+computer,1990,1930,calculator
+telephone,1900,1990,phone
+awful,1850,1990,terrible

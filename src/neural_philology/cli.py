@@ -97,6 +97,34 @@ def cmd_train(args: argparse.Namespace) -> None:
     print(f"wrote {len(emb.slice_years)} slices to {args.out}")
 
 
+def cmd_ngram_vocab(args: argparse.Namespace) -> None:
+    from .ngrams import build_unigram_table
+
+    table, vocab = build_unigram_table(
+        corpus=args.corpus, out_dir=args.data_dir, vocab_size=args.vocab_size
+    )
+    print(f"decades: {table.slices}")
+    print(f"vocab: {len(vocab)} words -> {args.data_dir}/vocab.txt")
+
+
+def cmd_ngram_cooc(args: argparse.Namespace) -> None:
+    from .ngrams import build_cooccurrences
+
+    build_cooccurrences(
+        corpus=args.corpus,
+        data_dir=args.data_dir,
+        start=args.start,
+        end=args.end,
+        workers=args.workers,
+    )
+
+
+def cmd_ngram_merge(args: argparse.Namespace) -> None:
+    from .ngrams import merge_cooccurrences
+
+    merge_cooccurrences(data_dir=args.data_dir)
+
+
 def cmd_eval(args: argparse.Namespace) -> None:
     from .evaluation import evaluate, load_testset
 
@@ -167,6 +195,26 @@ def main() -> None:
     p.add_argument("--min-count", type=int, default=5)
     p.add_argument("--epochs", type=int, default=5)
     p.set_defaults(func=cmd_train)
+
+    def add_ngram_opts(p: argparse.ArgumentParser) -> None:
+        p.add_argument("--corpus", default="eng-fiction")
+        p.add_argument("--data-dir", default="data/ngrams/eng-fiction")
+
+    p = sub.add_parser("ngram-vocab", help="stream 1-grams into vocab + frequency table")
+    add_ngram_opts(p)
+    p.add_argument("--vocab-size", type=int, default=50_000)
+    p.set_defaults(func=cmd_ngram_vocab)
+
+    p = sub.add_parser("ngram-cooc", help="stream 5-gram shards into co-occurrence counts")
+    add_ngram_opts(p)
+    p.add_argument("--start", type=int, default=0)
+    p.add_argument("--end", type=int, default=None)
+    p.add_argument("--workers", type=int, default=4)
+    p.set_defaults(func=cmd_ngram_cooc)
+
+    p = sub.add_parser("ngram-merge", help="merge shard co-occurrence files per decade")
+    add_ngram_opts(p)
+    p.set_defaults(func=cmd_ngram_merge)
 
     p = sub.add_parser("eval", help="score a cross-time equivalence testset")
     p.add_argument("--testset", required=True)

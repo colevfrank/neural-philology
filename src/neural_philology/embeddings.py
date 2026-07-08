@@ -107,7 +107,7 @@ class TemporalEmbeddings:
         if self.freq is not None:
             self.freq.save(directory / "counts.json")
         for slice_year, emb in self.slices.items():
-            np.savez_compressed(
+            np.savez(
                 directory / f"slice_{slice_year}.npz",
                 vectors=emb.vectors,
                 words=np.asarray(emb.words, dtype=object),

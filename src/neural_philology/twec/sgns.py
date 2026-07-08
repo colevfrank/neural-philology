@@ -152,12 +152,54 @@ def train_sgns(
     ``stream_counts`` are the token counts of *this* training stream aligned to
     ``vocab`` — they drive subsampling and the negative-sampling distribution.
     """
-    device = resolve_device(config.device)
     rng = np.random.default_rng(config.seed)
+    keep = keep_probs(stream_counts, config.subsample)
+    # Estimated total pairs for linear lr decay: kept tokens * E[2 * reduced window].
+    kept_tokens = float((stream_counts * keep).sum())
+
+    def batch_factory():
+        return iter_pair_batches(
+            sentence_factory(), vocab, config.window, keep, rng, config.batch_size
+        )
+
+    return train_sgns_pairs(
+        batch_factory,
+        len(vocab),
+        stream_counts,
+        config,
+        epochs,
+        est_pairs_per_epoch=kept_tokens * (config.window + 1),
+        w_in_init=w_in_init,
+        w_out_init=w_out_init,
+        freeze_context=freeze_context,
+        desc=desc,
+    )
+
+
+def train_sgns_pairs(
+    batch_factory: Callable[[], Iterable[tuple[np.ndarray, np.ndarray]]],
+    vocab_size: int,
+    stream_counts: np.ndarray,
+    config: TrainingConfig,
+    epochs: int,
+    est_pairs_per_epoch: float,
+    *,
+    w_in_init: np.ndarray | None = None,
+    w_out_init: np.ndarray | None = None,
+    freeze_context: bool = False,
+    desc: str = "sgns",
+) -> tuple[np.ndarray, np.ndarray]:
+    """Core SGNS loop over any source of (centers, contexts) id batches.
+
+    ``batch_factory`` is called once per epoch and must return a fresh batch
+    iterator. ``est_pairs_per_epoch`` drives the linear lr decay schedule.
+    """
+    device = resolve_device(config.device)
+    rng = np.random.default_rng(config.seed + 1)  # negatives-only stream
     torch.manual_seed(config.seed)
 
     model = SGNS(
-        len(vocab),
+        vocab_size,
         config.dim,
         w_in_init=w_in_init,
         w_out_init=w_out_init,
@@ -177,25 +219,21 @@ def train_sgns(
         raise ValueError("training stream contains no in-vocabulary tokens")
     # word2vec-style unigram table: negative sampling as vectorised uniform
     # integer draws (torch.multinomial over the vocab is far slower).
-    table_size = max(1_000_000, 10 * len(vocab))
+    table_size = max(1_000_000, 10 * vocab_size)
     noise_table = np.repeat(
-        np.arange(len(vocab)),
+        np.arange(vocab_size),
         np.maximum((noise / noise.sum() * table_size).round().astype(np.int64), 0),
     )
     if len(noise_table) == 0:
         raise ValueError("empty negative-sampling table")
 
-    keep = keep_probs(stream_counts, config.subsample)
-    # Estimated total pairs for linear lr decay: kept tokens * E[2 * reduced window].
-    kept_tokens = float((stream_counts * keep).sum())
-    est_total_pairs = max(1.0, epochs * kept_tokens * (config.window + 1))
+    est_total_pairs = max(1.0, epochs * est_pairs_per_epoch)
     pairs_seen = 0
 
     for epoch in range(epochs):
-        batches = iter_pair_batches(
-            sentence_factory(), vocab, config.window, keep, rng, config.batch_size
+        progress = tqdm(
+            batch_factory(), desc=f"{desc} epoch {epoch + 1}/{epochs}", unit="batch"
         )
-        progress = tqdm(batches, desc=f"{desc} epoch {epoch + 1}/{epochs}", unit="batch")
         for centers_np, contexts_np in progress:
             frac = min(1.0, pairs_seen / est_total_pairs)
             lr = max(config.min_lr, config.lr * (1.0 - frac))

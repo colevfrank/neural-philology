@@ -125,6 +125,23 @@ def cmd_ngram_merge(args: argparse.Namespace) -> None:
     merge_cooccurrences(data_dir=args.data_dir)
 
 
+def cmd_train_cooc(args: argparse.Namespace) -> None:
+    from .embeddings import TemporalEmbeddings as TE
+    from .twec.cooc import train_twec_cooc
+
+    config = TrainingConfig(
+        dim=args.dim,
+        compass_epochs=args.epochs,
+        slice_epochs=args.epochs,
+    )
+    model, freq, _ = train_twec_cooc(
+        args.data_dir, config, pairs_per_epoch=args.pairs_per_epoch
+    )
+    emb = TE.from_twec(model, freq, slice_width=10)
+    emb.save(args.out)
+    print(f"wrote {len(emb.slice_years)} slices to {args.out}")
+
+
 def cmd_eval(args: argparse.Namespace) -> None:
     from .evaluation import evaluate, load_testset
 
@@ -215,6 +232,14 @@ def main() -> None:
     p = sub.add_parser("ngram-merge", help="merge shard co-occurrence files per decade")
     add_ngram_opts(p)
     p.set_defaults(func=cmd_ngram_merge)
+
+    p = sub.add_parser("train-cooc", help="train TWEC from streamed ngram co-occurrences")
+    p.add_argument("--data-dir", default="data/ngrams/eng-fiction")
+    p.add_argument("--out", required=True)
+    p.add_argument("--dim", type=int, default=100)
+    p.add_argument("--epochs", type=int, default=3)
+    p.add_argument("--pairs-per-epoch", type=int, default=20_000_000)
+    p.set_defaults(func=cmd_train_cooc)
 
     p = sub.add_parser("eval", help="score a cross-time equivalence testset")
     p.add_argument("--testset", required=True)

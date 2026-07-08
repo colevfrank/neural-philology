@@ -1,0 +1,56 @@
+query_word,query_year,target_year,expected_word,category,range,notes
+car,1990,1900,carriage,technology,long,dominant personal road vehicle
+car,1990,1880,carriage,technology,long,
+carriage,1850,1990,car,technology,long,reverse direction of car case
+automobile,1910,1990,car,lexical-replacement,long,term replaced by shorter form
+aeroplane,1920,1990,airplane,lexical-replacement,long,spelling/term modernisation
+radio,1950,1850,telegraph,technology,long,long-distance communication medium
+phone,1990,1850,telegraph,technology,long,
+telephone,1900,1990,phone,lexical-replacement,long,clipping became standard
+telegram,1900,1990,fax,technology,long,rapid written message
+computer,1990,1940,calculator,technology,mid,hard case: machine sense barely exists pre-1950
+typewriter,1930,1990,computer,technology,mid,office writing machine
+icebox,1970,1990,refrigerator,technology,short,HistWords vocab lacks icebox before 1970
+phonograph,1900,1980,stereo,technology,mid,home music playback
+wireless,1920,1950,radio,lexical-replacement,short,1920s wireless = radio
+wireless,1920,1990,radio,lexical-replacement,mid,
+airplane,1980,1900,airship,technology,mid,heavier-than-air flight vs contemporary aviation
+steamship,1870,1970,airliner,technology,long,long-distance passenger transport
+omnibus,1880,1990,bus,lexical-replacement,long,
+streetcar,1950,1990,bus,technology,mid,urban mass transit; HistWords vocab lacks streetcar before 1950
+motor,1910,1990,engine,technology,long,
+atomic,1950,1980,nuclear,lexical-replacement,short,
+gay,1900,1990,merry,semantic-shift,long,1900 sense projected forward; expected = old sense synonym
+awful,1850,1990,terrible,semantic-shift,long,awful lost 'awe' sense
+terrific,1850,1990,terrifying,semantic-shift,long,terrific once meant frightening
+broadcast,1850,1990,sow,semantic-shift,long,originally scattering seed
+courting,1880,1990,dating,social,long,
+courtship,1880,1990,dating,social,long,
+frock,1900,1990,dress,lexical-replacement,long,
+spectacles,1880,1990,glasses,lexical-replacement,long,
+trousers,1900,1990,pants,lexical-replacement,long,US usage shift
+saloon,1880,1990,bar,social,long,drinking establishment
+tavern,1800,1990,bar,social,long,
+blacksmith,1850,1990,mechanic,occupation,long,vehicle maintenance trade
+stenographer,1920,1990,secretary,occupation,mid,
+consumption,1850,1990,tuberculosis,semantic-shift,long,consumption = TB in 19c
+suffrage,1910,1970,feminism,social,mid,women's-rights movement of the era
+bolshevik,1920,1980,communist,politics,mid,
+reagan,1985,1945,roosevelt,role-equivalence,mid,sitting US president
+nixon,1975,1935,roosevelt,role-equivalence,mid,sitting US president
+hitler,1940,1810,napoleon,role-equivalence,long,continental military threat
+ussr,1980,1900,russia,role-equivalence,mid,
+jazz,1930,1990,rock,culture,mid,dominant popular music
+dope,1990,1940,narcotic,slang,mid,drug sense
+flat,1900,1990,apartment,lexical-replacement,long,
+wages,1900,1990,salary,social,long,
+water,1850,1990,water,stable-control,long,meaning-stable word should be its own equivalent
+bread,1900,1990,bread,stable-control,long,
+mother,1850,1990,mother,stable-control,long,
+king,1850,1990,king,stable-control,long,
+winter,1880,1990,winter,stable-control,long,
+dope,2018,1955,swell,slang,mid,flagship example from project spec; needs modern corpus
+obama,2012,2002,bush,role-equivalence,short,needs modern corpus
+app,2012,1990,software,technology,short,needs modern corpus
+email,2010,1960,letter,technology,mid,needs modern corpus
+cellphone,2010,1980,telephone,technology,mid,needs modern corpus

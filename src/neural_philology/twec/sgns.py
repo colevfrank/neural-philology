@@ -30,8 +30,9 @@ def resolve_device(requested: str | None) -> torch.device:
         return torch.device(requested)
     if torch.cuda.is_available():
         return torch.device("cuda")
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
+    # MPS is deliberately NOT auto-selected: benchmarked 3x slower than CPU
+    # for this workload (small kernels, dispatch-bound). Pass device="mps"
+    # explicitly to override.
     return torch.device("cpu")
 
 
@@ -102,8 +103,11 @@ class SGNS(torch.nn.Module):
         seed: int = 42,
     ):
         super().__init__()
-        self.w_in = torch.nn.Embedding(vocab_size, dim)
-        self.w_out = torch.nn.Embedding(vocab_size, dim)
+        # sparse gradients: a batch touches only a few thousand rows, and
+        # dense Adam would otherwise update all V*d parameters every step
+        # (measured 90%+ of training time on realistic vocabularies).
+        self.w_in = torch.nn.Embedding(vocab_size, dim, sparse=True)
+        self.w_out = torch.nn.Embedding(vocab_size, dim, sparse=True)
         with torch.no_grad():
             if w_in_init is not None:
                 self.w_in.weight.copy_(torch.from_numpy(w_in_init))
@@ -165,12 +169,21 @@ def train_sgns(
     # pair's gradient by batch_size, which plain SGD can't absorb (per-pair
     # steps shrink ~1/B) — Adam's per-parameter normalisation is invariant to
     # that scaling, so training behaves consistently across batch sizes.
-    optimizer = torch.optim.Adam(params, lr=config.lr)
+    # SparseAdam only updates rows that received gradients this step.
+    optimizer = torch.optim.SparseAdam(params, lr=config.lr)
 
     noise = np.power(stream_counts, 0.75)
     if noise.sum() == 0:
         raise ValueError("training stream contains no in-vocabulary tokens")
-    noise_dist = torch.from_numpy(noise / noise.sum()).to(device)
+    # word2vec-style unigram table: negative sampling as vectorised uniform
+    # integer draws (torch.multinomial over the vocab is far slower).
+    table_size = max(1_000_000, 10 * len(vocab))
+    noise_table = np.repeat(
+        np.arange(len(vocab)),
+        np.maximum((noise / noise.sum() * table_size).round().astype(np.int64), 0),
+    )
+    if len(noise_table) == 0:
+        raise ValueError("empty negative-sampling table")
 
     keep = keep_probs(stream_counts, config.subsample)
     # Estimated total pairs for linear lr decay: kept tokens * E[2 * reduced window].
@@ -192,9 +205,10 @@ def train_sgns(
 
             centers = torch.from_numpy(centers_np).to(device)
             contexts = torch.from_numpy(contexts_np).to(device)
-            negatives = torch.multinomial(
-                noise_dist, len(centers_np) * config.negative, replacement=True
-            ).view(len(centers_np), config.negative)
+            neg_idx = rng.integers(
+                0, len(noise_table), size=(len(centers_np), config.negative)
+            )
+            negatives = torch.from_numpy(noise_table[neg_idx]).to(device)
 
             loss = model.loss(centers, contexts, negatives)
             optimizer.zero_grad()

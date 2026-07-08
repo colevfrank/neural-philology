@@ -32,10 +32,14 @@ def shard_url(corpus: str, n: int, index: int) -> str:
     return f"{BASE}/{corpus}/{n}-{index:05d}-of-{total:05d}.gz"
 
 
-def _stream(url: str, awk_args: list[str]) -> subprocess.Popen:
-    """curl | gunzip | awk, returning the awk process (stdout = aggregates)."""
+def _stream(url: str, awk_args: list[str]) -> list[subprocess.Popen]:
+    """curl | gunzip | awk; returns all three processes (awk last).
+
+    Callers must check every stage's exit status: a failed curl looks like a
+    clean EOF to awk, which would otherwise checkpoint a truncated shard.
+    """
     curl = subprocess.Popen(
-        ["curl", "-s", "--retry", "5", "--retry-all-errors", url],
+        ["curl", "-sf", "--retry", "5", "--retry-all-errors", url],
         stdout=subprocess.PIPE,
     )
     gunzip = subprocess.Popen(
@@ -46,7 +50,15 @@ def _stream(url: str, awk_args: list[str]) -> subprocess.Popen:
         awk_args, stdin=gunzip.stdout, stdout=subprocess.PIPE, text=True
     )
     gunzip.stdout.close()
-    return awk
+    return [curl, gunzip, awk]
+
+
+def _wait_all(procs: list[subprocess.Popen], what: str) -> None:
+    names = ("curl", "gunzip", "awk")
+    codes = [p.wait() for p in procs]
+    for name, code in zip(names, codes):
+        if code != 0:
+            raise RuntimeError(f"{what}: {name} exited with {code}")
 
 
 def build_unigram_table(
@@ -66,9 +78,10 @@ def build_unigram_table(
     counts: dict[int, dict[str, float]] = {}
     totals: dict[str, float] = {}
     for i in range(SHARD_COUNTS[(corpus, 1)]):
-        awk = _stream(
+        procs = _stream(
             shard_url(corpus, 1, i), ["awk", "-f", str(SCRIPTS / "ngram_unigram.awk")]
         )
+        awk = procs[-1]
         assert awk.stdout is not None
         for line in tqdm(awk.stdout, desc=f"1-grams shard {i}", unit="type"):
             word, decade, count = line.rstrip("\n").split("\t")
@@ -77,8 +90,7 @@ def build_unigram_table(
                 counts.get(int(decade), {}).get(word, 0.0) + c
             )
             totals[word] = totals.get(word, 0.0) + c
-        if awk.wait() != 0:
-            raise RuntimeError(f"unigram stream failed for shard {i}")
+        _wait_all(procs, f"1-gram shard {i}")
 
     vocab = sorted(
         (w for w, c in totals.items() if c >= min_count),
@@ -100,13 +112,14 @@ def process_cooc_shard(
     out_path = out_dir / f"shard-{index:05d}.npz"
     if out_path.exists():
         return out_path
-    awk = _stream(
+    procs = _stream(
         shard_url(corpus, 5, index),
         [
             "awk", "-f", str(SCRIPTS / "ngram_cooc.awk"),
             str(out_dir.parent / "vocab.txt"), "-",
         ],
     )
+    awk = procs[-1]
     decades, centers, ctxs, weights = [], [], [], []
     assert awk.stdout is not None
     for line in awk.stdout:
@@ -115,8 +128,7 @@ def process_cooc_shard(
         centers.append(vocab_index[center])
         ctxs.append(vocab_index[ctx])
         weights.append(int(weight))
-    if awk.wait() != 0:
-        raise RuntimeError(f"cooc stream failed for shard {index}")
+    _wait_all(procs, f"5-gram shard {index}")
     tmp = out_path.with_suffix(".tmp.npz")
     np.savez(
         tmp,
